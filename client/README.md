@@ -1,6 +1,6 @@
 # client
 
-A new Flutter project.
+This is the fine form accounting client app
 
 ## Getting Started
 
