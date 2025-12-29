@@ -1,31 +1,28 @@
 {
-  "name": "ffa-project",
+  "name": "admin",
+  "version": "0.1.0",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "node server.js",
-    "dev:client": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
   },
   "dependencies": {
-    "@primevue/themes": "^4.5.4",
-    "@tailwindcss/postcss": "^4.1.18",
-    "autoprefixer": "^10.4.23",
-    "chart.js": "^4.5.1",
-    "cors": "^2.8.5",
-    "express": "^5.2.1",
-    "postcss": "^8.5.6",
-    "primeicons": "^7.0.0",
-    "primevue": "^4.5.4",
-    "tailwindcss": "^4.1.18",
-    "vue": "^3.5.24"
+    "@tanstack/react-query": "^5.90.12",
+    "axios": "^1.13.2",
+    "next": "16.1.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^6.0.1",
-    "concurrently": "^9.2.1",
-    "vite": "^7.2.4"
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
   }
 }

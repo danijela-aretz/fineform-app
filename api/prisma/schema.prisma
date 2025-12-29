@@ -1,0 +1,627 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Authentication & Users
+// ============================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String    // bcrypt hash
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  staffProfile  StaffProfile? @relation("StaffUser")
+
+  @@map("users")
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  userType  UserType @default(CLIENT)
+  fullName  String
+  email     String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffProfile StaffProfile? @relation("StaffProfile", map: "staff_profiles_userId_profile_fkey")
+  accountUsers AccountUser[]
+
+  @@map("profiles")
+}
+
+enum UserType {
+  STAFF
+  CLIENT
+}
+
+model StaffProfile {
+  id                 String      @id @default(uuid())
+  userId             String      @unique
+  staffRole          StaffRole   @default(STAFF)
+  staffTeamReporting String?     // fine_form | fin_group (reporting only)
+  jobTitle           String?
+  phone              String?
+  active              Boolean     @default(true)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  user                User                @relation("StaffUser", fields: [userId], references: [id], onDelete: Cascade, map: "staff_profiles_userId_user_fkey")
+  profile             Profile             @relation("StaffProfile", fields: [userId], references: [userId], onDelete: Cascade, map: "staff_profiles_userId_profile_fkey")
+  clientAcl           ClientAcl[]
+  clientStaffPermissions ClientStaffPermission[]
+  clientStaffAssignments ClientStaffAssignment[]
+  folderAcl           FolderAcl[]
+  uploadedDocuments   Document[]          @relation("UploadedBy")
+  assignedThreads     ThreadParticipant[]
+  sentMessages         Message[]
+  statusAuditLogs     StatusAuditLog[]
+  permissionAuditLogs PermissionAuditLog[]
+
+  @@map("staff_profiles")
+}
+
+enum StaffRole {
+  SUPER_ADMIN
+  ADMIN
+  STAFF
+}
+
+// ============================================
+// Client Accounts & Entities
+// ============================================
+
+model Account {
+  id          String   @id @default(uuid())
+  displayName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  accountUsers AccountUser[]
+  entities     ClientEntity[]
+
+  @@map("accounts")
+}
+
+model AccountUser {
+  id         String     @id @default(uuid())
+  accountId  String
+  userId     String
+  clientRole ClientRole @default(ASSISTANT)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  profile Profile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([accountId, userId])
+  @@map("account_users")
+}
+
+enum ClientRole {
+  ADMIN
+  ASSISTANT
+}
+
+model ClientEntity {
+  id         String       @id @default(uuid())
+  accountId  String
+  entityName String
+  entityType EntityType
+  status     String?
+  isRestricted Boolean    @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  account          Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  entityTaxYears  EntityTaxYear[]
+  folders          Folder[]
+  documents        Document[]
+  clientAcl        ClientAcl[]
+  clientStaffPermissions ClientStaffPermission[]
+  clientStaffAssignments ClientStaffAssignment[]
+
+  @@map("client_entities")
+}
+
+enum EntityType {
+  HOUSEHOLD_1040
+  LLC
+  S_CORP
+  C_CORP
+  PARTNERSHIP
+  SOLE_PROPRIETORSHIP
+  TRUST
+  ESTATE
+  OTHER
+}
+
+// ============================================
+// Entity Tax Year (Core Container)
+// ============================================
+
+model EntityTaxYear {
+  id                        String              @id @default(uuid())
+  clientEntityId            String
+  taxYear                   Int
+  // Invite control
+  taxReturnExpected         Boolean             @default(false)
+  inviteStatus              InviteStatus        @default(NOT_SENT)
+  inviteSentAt              DateTime?
+  attemptCount              Int                 @default(0)
+  lastError                 String?
+  // Engagement
+  engagementStatus          EngagementStatus    @default(NOT_STARTED)
+  engagementSignedAt        DateTime?
+  engagementSigner1Id       String?
+  engagementSigner2Id       String?
+  // Docs
+  docsRequiredCount         Int                 @default(0)
+  docsReceivedCount         Int                 @default(0)
+  checklistCompleteAt       DateTime?
+  // Confirmation
+  docConfirmationStatus     ConfirmationStatus @default(NOT_SIGNED)
+  docConfirmationSignedAt   DateTime?
+  docConfirmationSignerId   String?
+  // Questionnaire
+  questionnaireStatus       QuestionnaireStatus @default(NOT_STARTED)
+  questionnaireCompletedAt  DateTime?
+  // ID
+  idStatus                  IdStatus            @default(INVALID)
+  idValidUntil              DateTime?
+  // Ready for Prep Gate (computed or stored)
+  readyForPrep              Boolean             @default(false)
+  // Extension
+  extensionRequested        Boolean             @default(false)
+  extensionFiled            Boolean             @default(false)
+  extendedDueDate           DateTime?
+  // Internal status
+  internalStatus            InternalStatus      @default(INVITED)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  clientEntity              ClientEntity        @relation(fields: [clientEntityId], references: [id], onDelete: Cascade)
+  checklistItems            ChecklistItem[]
+  questionnaireAnswers      QuestionnaireAnswer[]
+  messageThread             MessageThread?
+  reminderState            ReminderState?
+  statusAuditLogs           StatusAuditLog[]
+  documentEvents            DocumentEvent[]
+  engagementSignatures      EngagementSignature[]
+  efileAuthorizations        EfileAuthorization[]
+
+  @@unique([clientEntityId, taxYear])
+  @@map("entity_tax_years")
+}
+
+enum InviteStatus {
+  NOT_SENT
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum EngagementStatus {
+  NOT_STARTED
+  PARTIALLY_SIGNED
+  FULLY_SIGNED
+}
+
+enum ConfirmationStatus {
+  NOT_SIGNED
+  SIGNED
+}
+
+enum QuestionnaireStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum IdStatus {
+  INVALID
+  VALID
+  EXPIRED
+}
+
+enum InternalStatus {
+  INVITED
+  ENGAGED
+  COLLECTING_DOCS
+  AWAITING_CONFIRMATION
+  READY_FOR_PREP
+  IN_PREP
+  AWAITING_EFILE_AUTH
+  FILED
+}
+
+// ============================================
+// Permissions
+// ============================================
+
+model ClientAcl {
+  id           String   @id @default(uuid())
+  clientId     String   // client_entity_id
+  staffUserId  String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clientEntity ClientEntity @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([clientId, staffUserId])
+  @@map("client_acl")
+}
+
+model ClientStaffPermission {
+  id            String   @id @default(uuid())
+  clientId      String   // client_entity_id
+  staffUserId   String
+  canSeeTaxes   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clientEntity ClientEntity @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([clientId, staffUserId])
+  @@map("client_staff_permissions")
+}
+
+model ClientStaffAssignment {
+  id           String   @id @default(uuid())
+  clientId     String   // client_entity_id
+  staffUserId  String
+  roleOnClient String   // preparer | assistant
+  active        Boolean  @default(true)
+  assignedBy   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  clientEntity ClientEntity @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  staff        StaffProfile @relation(fields: [staffUserId], references: [userId], onDelete: Cascade)
+
+  @@map("client_staff_assignments")
+}
+
+// ============================================
+// Folders & Documents
+// ============================================
+
+model Folder {
+  id                String   @id @default(uuid())
+  clientId          String   // client_entity_id
+  name              String
+  parentId           String?
+  folderType         String?
+  isSystem           Boolean  @default(false)
+  clientVisible      Boolean  @default(true)
+  staffOnly          Boolean  @default(false)
+  adminOnly          Boolean  @default(false)
+  superAdminOnly     Boolean  @default(false)
+  restrictedAcl      Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  clientEntity ClientEntity @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  parent       Folder?      @relation("FolderTree", fields: [parentId], references: [id])
+  children     Folder[]     @relation("FolderTree")
+  documents    Document[]
+  folderAcl    FolderAcl[]
+
+  @@map("folders")
+}
+
+model FolderAcl {
+  id          String   @id @default(uuid())
+  folderId    String
+  staffUserId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  folder Folder       @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  staff  StaffProfile @relation(fields: [staffUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([folderId, staffUserId])
+  @@map("folder_acl")
+}
+
+model Document {
+  id          String   @id @default(uuid())
+  clientId    String   // client_entity_id
+  folderId    String?
+  storagePath String   // Local filesystem path
+  displayName String
+  uploadedBy  String?  // staff_user_id (nullable for client uploads)
+  fileSize    Int?
+  mimeType    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  clientEntity ClientEntity @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  folder       Folder?     @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploader     StaffProfile? @relation("UploadedBy", fields: [uploadedBy], references: [userId], onDelete: SetNull)
+  checklistItems ChecklistItemFile[]
+
+  @@map("documents")
+}
+
+// ============================================
+// Checklist & Questionnaire
+// ============================================
+
+model ChecklistItem {
+  id                String   @id @default(uuid())
+  entityTaxYearId   String
+  itemName           String
+  itemType           String?  // document type
+  required           Boolean  @default(true)
+  status             ChecklistItemStatus @default(PENDING)
+  receivedAt         DateTime?
+  markedNotApplicableAt DateTime?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  entityTaxYear EntityTaxYear @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+  files         ChecklistItemFile[]
+
+  @@map("checklist_items")
+}
+
+enum ChecklistItemStatus {
+  PENDING
+  RECEIVED
+  NOT_APPLICABLE
+}
+
+model ChecklistItemFile {
+  id              String   @id @default(uuid())
+  checklistItemId String
+  documentId      String
+  createdAt       DateTime @default(now())
+
+  checklistItem ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  document      Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([checklistItemId, documentId])
+  @@map("checklist_item_files")
+}
+
+model QuestionnaireSection {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  order       Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions QuestionnaireQuestion[]
+
+  @@map("questionnaire_sections")
+}
+
+model QuestionnaireQuestion {
+  id          String   @id @default(uuid())
+  sectionId   String
+  questionText String
+  questionType QuestionType
+  required    Boolean  @default(false)
+  order       Int      @default(0)
+  conditionalLogic String? // JSON for conditional display
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  section QuestionnaireSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  answers  QuestionnaireAnswer[]
+
+  @@map("questionnaire_questions")
+}
+
+enum QuestionType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+  FILE
+}
+
+model QuestionnaireAnswer {
+  id          String   @id @default(uuid())
+  entityTaxYearId String
+  questionId  String
+  answerValue String?  // JSON for complex answers
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  entityTaxYear EntityTaxYear      @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+  question      QuestionnaireQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([entityTaxYearId, questionId])
+  @@map("questionnaire_answers")
+}
+
+// ============================================
+// Signatures
+// ============================================
+
+model EngagementSignature {
+  id              String   @id @default(uuid())
+  entityTaxYearId String
+  signerName      String
+  signerEmail     String
+  signatureData   String   // Base64 signature image or JSON
+  signedAt        DateTime @default(now())
+
+  entityTaxYear EntityTaxYear @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+
+  @@map("engagement_signatures")
+}
+
+model EfileAuthorization {
+  id              String   @id @default(uuid())
+  entityTaxYearId String
+  signerName      String
+  signerEmail     String
+  signatureData   String   // Base64 signature image or JSON
+  signedAt        DateTime @default(now())
+
+  entityTaxYear EntityTaxYear @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+
+  @@map("efile_authorizations")
+}
+
+// ============================================
+// Messaging
+// ============================================
+
+model MessageThread {
+  id              String   @id @default(uuid())
+  entityTaxYearId  String   @unique
+  archived        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entityTaxYear EntityTaxYear    @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+  participants   ThreadParticipant[]
+  messages       Message[]
+
+  @@map("message_threads")
+}
+
+model ThreadParticipant {
+  id        String   @id @default(uuid())
+  threadId  String
+  userId    String   // profile user_id (staff or client)
+  userType  UserType
+  createdAt DateTime @default(now())
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  staff  StaffProfile? @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@map("thread_participants")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  threadId  String
+  senderId  String   // staff_user_id or client profile user_id
+  senderType UserType
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender StaffProfile? @relation(fields: [senderId], references: [userId], onDelete: SetNull)
+
+  @@map("messages")
+}
+
+// ============================================
+// Reminders
+// ============================================
+
+model ReminderState {
+  id                String   @id @default(uuid())
+  entityTaxYearId   String
+  reminderType      ReminderType
+  nextReminderAt    DateTime?
+  lastReminderAt    DateTime?
+  reminderCount     Int      @default(0)
+  paused            Boolean  @default(false)
+  pausedReason      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  entityTaxYear EntityTaxYear @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+
+  @@unique([entityTaxYearId, reminderType])
+  @@map("reminder_states")
+}
+
+enum ReminderType {
+  DOCUMENTS
+  QUESTIONNAIRE
+  ID
+}
+
+// ============================================
+// Audit Logs
+// ============================================
+
+model StatusAuditLog {
+  id              String   @id @default(uuid())
+  entityTaxYearId String
+  oldStatus       String?
+  newStatus       String
+  changedBy       String   // staff_user_id
+  reason          String?
+  createdAt       DateTime @default(now())
+
+  entityTaxYear EntityTaxYear @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+  staff         StaffProfile  @relation(fields: [changedBy], references: [userId], onDelete: Cascade)
+
+  @@map("status_audit_log")
+}
+
+model PermissionAuditLog {
+  id          String   @id @default(uuid())
+  changeType  String   // client_acl, tax_permission, assignment
+  clientId    String?
+  staffUserId String?
+  oldValue    String?  // JSON
+  newValue    String?  // JSON
+  changedBy   String   // staff_user_id
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  staff StaffProfile @relation(fields: [changedBy], references: [userId], onDelete: Cascade)
+
+  @@map("permission_audit_log")
+}
+
+model DocumentEvent {
+  id              String   @id @default(uuid())
+  entityTaxYearId String
+  eventType       DocumentEventType
+  documentId      String?
+  description     String?
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+
+  entityTaxYear EntityTaxYear @relation(fields: [entityTaxYearId], references: [id], onDelete: Cascade)
+
+  @@map("document_events")
+}
+
+enum DocumentEventType {
+  UPLOADED
+  REPLACED
+  MARKED_NOT_APPLICABLE
+  CONFIRMATION_SIGNED
+  EXTENSION_REQUESTED
+  EXTENSION_FILED
+  EFILE_AUTH_REQUESTED
+  EFILE_AUTH_SIGNED
+}
+

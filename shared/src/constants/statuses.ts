@@ -1,0 +1,35 @@
+export enum InternalStatus {
+  INVITED = 'INVITED',
+  ENGAGED = 'ENGAGED',
+  COLLECTING_DOCS = 'COLLECTING_DOCS',
+  AWAITING_CONFIRMATION = 'AWAITING_CONFIRMATION',
+  READY_FOR_PREP = 'READY_FOR_PREP',
+  IN_PREP = 'IN_PREP',
+  AWAITING_EFILE_AUTH = 'AWAITING_EFILE_AUTH',
+  FILED = 'FILED',
+}
+
+export enum EngagementStatus {
+  NOT_STARTED = 'NOT_STARTED',
+  PARTIALLY_SIGNED = 'PARTIALLY_SIGNED',
+  FULLY_SIGNED = 'FULLY_SIGNED',
+}
+
+export enum InviteStatus {
+  NOT_SENT = 'NOT_SENT',
+  QUEUED = 'QUEUED',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+}
+
+export enum UserType {
+  STAFF = 'STAFF',
+  CLIENT = 'CLIENT',
+}
+
+export enum StaffRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  STAFF = 'STAFF',
+}
+
